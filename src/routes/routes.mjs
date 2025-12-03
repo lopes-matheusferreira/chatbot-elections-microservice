@@ -10,6 +10,14 @@ import {
 
 const router = express.Router();
 
+router.get('/health', (req, res) => {
+	res.status(200).json({ 
+		status: 'ok', 
+		timestamp: new Date().toISOString(),
+		uptime: process.uptime()
+	});
+});
+
 router.get('/threads', authenticate, controller.getThreads);
 
 router.get(
