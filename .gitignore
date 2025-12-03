@@ -14,4 +14,4 @@ Thumbs.db
 
 .vscode/
 .idea/
-EOF
+EOF.env.docker
