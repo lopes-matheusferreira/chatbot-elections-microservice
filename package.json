@@ -45,6 +45,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
+    "@types/node": "^24.10.1",
     "@vitest/ui": "^4.0.10",
     "eslint": "^9.39.1",
     "vitest": "^4.0.10"
