@@ -5,13 +5,25 @@ node_modules/
 .env.docker
 .env.local
 
+
 *.log
 
+
 coverage/
+
 
 .DS_Store
 Thumbs.db
 
+
 .vscode/
 .idea/
-EOF.env.docker
+
+database/backups/
+database/init/02-data.sql
+database/init/*.sql.gz
+*.sql
+*.dump
+
+mysql-data/
+redis-data/

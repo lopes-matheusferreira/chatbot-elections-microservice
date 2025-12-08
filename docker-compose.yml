@@ -1,51 +1,142 @@
 version: "3.8"
 
 services:
-  app:
-    build: .
-    container_name: chatbot-app
-    ports:
-      - "3000:3000"
-    env_file:
-      - .env.docker
-    environment:
-      REDIS_URL: redis://redis:6379
-    depends_on:
-      - redis
+  # =====================================================
+  # MYSQL DATABASE
+  # =====================================================
+  mysql:
+    image: mysql:8.0
+    container_name: chatbot-mysql
     restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      # Configurações de performance
+      MYSQL_INNODB_BUFFER_POOL_SIZE: 1G
+      MYSQL_MAX_CONNECTIONS: 200
+    ports:
+      # Expor porta para acesso externo (VSCode, Workbench, etc)
+      - "3306:3306"
+    volumes:
+      # Persistência dos dados (NUNCA SERÃO APAGADOS)
+      - mysql-data:/var/lib/mysql
+      # Scripts de inicialização (executados apenas na primeira vez)
+      - ./database/init:/docker-entrypoint-initdb.d:ro
+      # Configurações customizadas do MySQL
+      - ./database/config/my.cnf:/etc/mysql/conf.d/custom.cnf:ro
+    command: 
+      - --default-authentication-plugin=mysql_native_password
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --max_allowed_packet=256M
+      - --innodb_log_file_size=512M
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/chat/health"]
-      interval: 30s
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u${DB_USER}", "-p${DB_PASSWORD}"]
+      interval: 10s
       timeout: 5s
-      retries: 3
+      retries: 5
+      start_period: 30s
+    networks:
+      - chatbot-network
 
+  # =====================================================
+  # REDIS CACHE
+  # =====================================================
   redis:
     image: redis:7-alpine
     container_name: chatbot-redis
     restart: unless-stopped
     volumes:
       - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - chatbot-network
 
+  # =====================================================
+  # NODE.JS APPLICATION
+  # =====================================================
+  app:
+    build: .
+    container_name: chatbot-app
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env.docker
+    environment:
+      # Redis connection
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      # MySQL connection
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      # Node environment
+      NODE_ENV: production
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/chat/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - chatbot-network
+
+  # =====================================================
+  # NGINX REVERSE PROXY
+  # =====================================================
   nginx:
     image: nginx:alpine
     container_name: chatbot-nginx
+    restart: unless-stopped
     ports:
       - "80:80"
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - nginx-logs:/var/log/nginx
     depends_on:
-      - app
-    restart: unless-stopped
+      app:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "nginx -t || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
+    networks:
+      - chatbot-network
 
+# =====================================================
+# VOLUMES - DADOS PERSISTENTES
+# =====================================================
 volumes:
+  mysql-data:
+    driver: local
+    name: chatbot-mysql-data
   redis-data:
     driver: local
+    name: chatbot-redis-data
   nginx-logs:
     driver: local
+    name: chatbot-nginx-logs
+
+# =====================================================
+# NETWORK
+# =====================================================
+networks:
+  chatbot-network:
+    driver: bridge
+    name: chatbot-network
