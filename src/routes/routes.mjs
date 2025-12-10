@@ -10,13 +10,8 @@ import {
 
 const router = express.Router();
 
-router.get('/health', (req, res) => {
-	res.status(200).json({ 
-		status: 'ok', 
-		timestamp: new Date().toISOString(),
-		uptime: process.uptime()
-	});
-});
+// ❌ REMOVIDO: já está no app.mjs na raiz
+// router.get('/health', (req, res) => { ... });
 
 router.get('/threads', authenticate, controller.getThreads);
 
@@ -29,10 +24,10 @@ router.get(
 router.post('/new-thread', authenticate, controller.createThread);
 
 router.post(
-	'/:threadId/send-message', 
+	'/:threadId/send-message',
 	authenticate,
-  	validate(sendMessageSchema), 
-  	controller.sendMessage
+	validate(sendMessageSchema),
+	controller.sendMessage
 );
 
 router.delete(

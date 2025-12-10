@@ -11,6 +11,8 @@ RUN npm prune --omit=dev --legacy-peer-deps
 
 FROM node:20-alpine
 
+RUN apk add --no-cache wget  # ✅ Adiciona wget para o healthcheck
+
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nodejs -u 1001
 

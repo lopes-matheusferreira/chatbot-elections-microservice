@@ -1,6 +1,10 @@
 import dotenv from 'dotenv';
-dotenv.config();
 import { logger } from './logger.mjs';
+
+// ✅ Carrega .env apenas em desenvolvimento
+if (process.env.NODE_ENV !== 'production') {
+	dotenv.config();
+}
 
 function required(name) {
 	const value = process.env[name];
@@ -12,7 +16,6 @@ function required(name) {
 }
 
 export const config = {
-
 	port: process.env.PORT || 3000,
 	env: process.env.NODE_ENV || 'development',
 	apiKey: required('API_KEY'),
@@ -26,10 +29,10 @@ export const config = {
 	},
   
 	redis: {
+		// ✅ Retorna apenas host e port separados (SEM redis://)
 		host: process.env.REDIS_HOST || 'localhost',
-		db: parseInt(process.env.REDIS_DB || '0'),
 		port: parseInt(process.env.REDIS_PORT || '6379'),
+		db: parseInt(process.env.REDIS_DB || '0'),
 		prefix: process.env.REDIS_PREFIX || 'eleicoes-chatbot'
 	}
-
 };
