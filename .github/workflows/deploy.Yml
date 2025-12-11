@@ -1,0 +1,82 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh $SSH_USER@$SSH_HOST << 'ENDSSH'
+            set -e
+            
+            echo "Navegando para o diretório de deploy..."
+            cd ${{ secrets.DEPLOY_PATH }}
+            
+            echo "Verificando se é primeira instalação..."
+            if [ ! -d ".git" ]; then
+              echo "Primeira instalação - clonando repositório..."
+              cd ..
+              sudo rm -rf ai-eleicoes
+              git clone git@github.com:lopes-matheusferreira/chatbot-elections-microservice ai-eleicoes
+              cd ai-eleicoes
+            else
+              echo "Atualizando código..."
+              git fetch origin
+              git reset --hard origin/main
+            fi
+            
+            echo "Parando containers antigos..."
+            docker compose down || true
+            
+            echo "Rebuilding imagens..."
+            docker compose build --no-cache app
+            
+            echo "Subindo containers..."
+            docker compose up -d
+            
+            echo "Aguardando containers ficarem saudáveis..."
+            sleep 10
+            
+            echo "Deploy concluído!"
+            docker compose ps
+          ENDSSH
+
+      - name: Verify deployment
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+        run: |
+          ssh $SSH_USER@$SSH_HOST << 'ENDSSH'
+            cd ${{ secrets.DEPLOY_PATH }}
+            
+            echo "Verificando status dos containers..."
+            docker compose ps
+            
+            echo "Testando health endpoint..."
+            sleep 5
+            curl -f http://localhost:8012/health || echo "ealth check falhou"
+          ENDSSH
