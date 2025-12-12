@@ -74,7 +74,7 @@ jobs:
               echo "Primeira instalação - clonando repositório..."
               git clone https://github.com/${{ github.repository }}.git .
             else
-              echo "🔄 Atualizando código..."
+              echo "Atualizando código..."
               git fetch origin
               git reset --hard origin/main
               git clean -fd
