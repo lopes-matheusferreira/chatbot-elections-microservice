@@ -80,7 +80,7 @@ jobs:
               git clean -fd
             fi
 
-            echo "🐳 Parando containers antigos..."
+            echo "Parando containers antigos..."
             docker compose down || true
 
             echo "🏗️  Rebuilding imagens..."
