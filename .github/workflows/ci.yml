@@ -36,7 +36,6 @@ jobs:
     name: Deploy para Produção
     needs: test
     runs-on: ubuntu-latest
-    # Só faz deploy em push na main (não em PRs)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
     steps:
