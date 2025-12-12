@@ -1,4 +1,4 @@
-name: CI - Testes Automáticos
+name: CI/CD - Testes e Deploy
 
 on:
   push:
@@ -31,3 +31,85 @@ jobs:
 
       - name: Ver cobertura
         run: npm run test:coverage
+
+  deploy:
+    name: Deploy para Produção
+    needs: test
+    runs-on: ubuntu-latest
+    # Só faz deploy em push na main (não em PRs)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          ssh $SSH_USER@$SSH_HOST << 'ENDSSH'
+            set -e
+
+            echo "📦 Navegando para o diretório de deploy..."
+            
+            # Cria diretório se não existir
+            sudo mkdir -p ${{ secrets.DEPLOY_PATH }}
+            sudo chown ${{ secrets.SSH_USER }}:${{ secrets.SSH_USER }} ${{ secrets.DEPLOY_PATH }}
+            
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            echo "🔄 Verificando se é primeira instalação..."
+            if [ ! -d ".git" ]; then
+              echo "🆕 Primeira instalação - clonando repositório..."
+              git clone https://github.com/${{ github.repository }}.git .
+            else
+              echo "🔄 Atualizando código..."
+              git fetch origin
+              git reset --hard origin/main
+              git clean -fd
+            fi
+
+            echo "🐳 Parando containers antigos..."
+            docker compose down || true
+
+            echo "🏗️  Rebuilding imagens..."
+            docker compose build --no-cache app
+
+            echo "🚀 Subindo containers..."
+            docker compose up -d
+
+            echo "⏳ Aguardando containers ficarem saudáveis..."
+            sleep 15
+
+            echo "✅ Deploy concluído!"
+            docker compose ps
+          ENDSSH
+
+      - name: Verificar deploy
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+        run: |
+          sleep 5
+          ssh $SSH_USER@$SSH_HOST << 'ENDSSH'
+            cd ${{ secrets.DEPLOY_PATH }}
+
+            echo "🔍 Verificando status dos containers..."
+            docker compose ps
+
+            echo "🏥 Testando health endpoint..."
+            curl -f http://localhost:8012/health && echo "✅ API está respondendo!" || echo "⚠️ Health check falhou"
+          ENDSSH
